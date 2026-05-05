@@ -1,1 +1,1 @@
-# app/models 套件初始化
+# 初始化 models 模組

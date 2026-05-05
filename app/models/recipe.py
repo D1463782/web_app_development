@@ -1,266 +1,199 @@
-"""
-食譜收藏系統 — Recipe Model
-
-使用原生 sqlite3 操作資料庫，提供食譜、材料、步驟的 CRUD 方法。
-"""
-
 import sqlite3
-from datetime import datetime
+import os
+from flask import current_app
 
-
-def get_db(db_path):
+def get_db_connection():
     """
-    取得資料庫連線。
-
-    Args:
-        db_path (str): SQLite 資料庫檔案路徑
-
-    Returns:
-        sqlite3.Connection: 資料庫連線物件
+    建立並回傳與 SQLite 資料庫的連線。
+    預設使用 app 設定的 DATABASE 路徑，若無 app context 則退回到 instance/database.db
     """
+    try:
+        db_path = current_app.config['DATABASE']
+    except (RuntimeError, KeyError):
+        # 當不在 app context 內，或是沒有 DATABASE 設定時的退回機制
+        db_path = os.path.join('instance', 'database.db')
+        
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row  # 讓查詢結果可以用欄位名稱存取
-    conn.execute("PRAGMA foreign_keys = ON")  # 啟用外鍵約束
+    conn.row_factory = sqlite3.Row
+    # 啟用外鍵支援，讓 ON DELETE CASCADE 生效
+    conn.execute('PRAGMA foreign_keys = ON;')
     return conn
 
+# ==========================================
+# Recipe (食譜) 相關操作
+# ==========================================
 
-# ============================================
-# 食譜（Recipe）CRUD
-# ============================================
-
-def create_recipe(db_path, name, description=""):
-    """
-    新增一筆食譜。
-
-    Args:
-        db_path (str): 資料庫路徑
-        name (str): 食譜名稱
-        description (str): 食譜描述（選填）
-
-    Returns:
-        int: 新建食譜的 ID
-    """
-    conn = get_db(db_path)
+def get_all_recipes():
+    """取得所有食譜，按建立時間反序排列"""
     try:
-        cursor = conn.execute(
-            "INSERT INTO recipes (name, description) VALUES (?, ?)",
+        conn = get_db_connection()
+        recipes = conn.execute('SELECT * FROM recipes ORDER BY created_at DESC').fetchall()
+        conn.close()
+        return recipes
+    except sqlite3.Error as e:
+        print(f"Database error in get_all_recipes: {e}")
+        return []
+
+def get_recipe_by_id(recipe_id):
+    """根據 ID 取得單筆食譜"""
+    try:
+        conn = get_db_connection()
+        recipe = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+        conn.close()
+        return recipe
+    except sqlite3.Error as e:
+        print(f"Database error in get_recipe_by_id: {e}")
+        return None
+
+def create_recipe(name, description):
+    """
+    新增一筆食譜
+    :param name: 食譜名稱
+    :param description: 食譜描述
+    :return: 新增的食譜 ID，若失敗則回傳 None
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO recipes (name, description) VALUES (?, ?)',
             (name, description)
         )
+        recipe_id = cursor.lastrowid
         conn.commit()
-        return cursor.lastrowid
-    finally:
         conn.close()
+        return recipe_id
+    except sqlite3.Error as e:
+        print(f"Database error in create_recipe: {e}")
+        return None
 
-
-def get_all_recipes(db_path):
+def update_recipe(recipe_id, name, description):
     """
-    取得所有食譜列表（依建立時間倒序排列）。
-
-    Args:
-        db_path (str): 資料庫路徑
-
-    Returns:
-        list[sqlite3.Row]: 食譜列表
+    更新食譜基本資料
+    :param recipe_id: 食譜 ID
+    :param name: 食譜名稱
+    :param description: 食譜描述
     """
-    conn = get_db(db_path)
     try:
-        recipes = conn.execute(
-            "SELECT * FROM recipes ORDER BY created_at DESC"
-        ).fetchall()
-        return recipes
-    finally:
-        conn.close()
-
-
-def get_recipe_by_id(db_path, recipe_id):
-    """
-    根據 ID 取得單一食譜。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-
-    Returns:
-        sqlite3.Row or None: 食譜資料，找不到時回傳 None
-    """
-    conn = get_db(db_path)
-    try:
-        recipe = conn.execute(
-            "SELECT * FROM recipes WHERE id = ?",
-            (recipe_id,)
-        ).fetchone()
-        return recipe
-    finally:
-        conn.close()
-
-
-def update_recipe(db_path, recipe_id, name, description=""):
-    """
-    更新食譜的基本資訊。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-        name (str): 新的食譜名稱
-        description (str): 新的食譜描述
-    """
-    now = datetime.now().isoformat(timespec='seconds')
-    conn = get_db(db_path)
-    try:
+        conn = get_db_connection()
         conn.execute(
-            "UPDATE recipes SET name = ?, description = ?, updated_at = ? WHERE id = ?",
-            (name, description, now, recipe_id)
+            'UPDATE recipes SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (name, description, recipe_id)
         )
         conn.commit()
-    finally:
         conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in update_recipe: {e}")
+        return False
 
-
-def delete_recipe(db_path, recipe_id):
+def delete_recipe(recipe_id):
     """
-    刪除食譜（CASCADE 會自動刪除相關的材料與步驟）。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
+    刪除食譜（SQLite CASCADE 會自動刪除相關的材料與步驟）
+    :param recipe_id: 食譜 ID
     """
-    conn = get_db(db_path)
     try:
-        conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+        conn = get_db_connection()
+        conn.execute('DELETE FROM recipes WHERE id = ?', (recipe_id,))
         conn.commit()
-    finally:
         conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in delete_recipe: {e}")
+        return False
 
+# ==========================================
+# Ingredients (材料) 相關操作
+# ==========================================
 
-# ============================================
-# 材料（Ingredient）CRUD
-# ============================================
-
-def add_ingredients(db_path, recipe_id, ingredients):
-    """
-    為食譜新增多筆材料。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-        ingredients (list[dict]): 材料列表，每項需包含 'name'，可選 'quantity'
-            範例：[{'name': '雞蛋', 'quantity': '3顆'}, {'name': '鹽', 'quantity': '適量'}]
-    """
-    conn = get_db(db_path)
+def get_ingredients_by_recipe(recipe_id):
+    """取得特定食譜的所有材料"""
     try:
-        for item in ingredients:
-            conn.execute(
-                "INSERT INTO ingredients (recipe_id, name, quantity) VALUES (?, ?, ?)",
-                (recipe_id, item['name'], item.get('quantity', ''))
-            )
-        conn.commit()
-    finally:
+        conn = get_db_connection()
+        ingredients = conn.execute('SELECT * FROM ingredients WHERE recipe_id = ?', (recipe_id,)).fetchall()
         conn.close()
-
-
-def get_ingredients_by_recipe(db_path, recipe_id):
-    """
-    取得某食譜的所有材料。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-
-    Returns:
-        list[sqlite3.Row]: 材料列表
-    """
-    conn = get_db(db_path)
-    try:
-        ingredients = conn.execute(
-            "SELECT * FROM ingredients WHERE recipe_id = ?",
-            (recipe_id,)
-        ).fetchall()
         return ingredients
-    finally:
-        conn.close()
+    except sqlite3.Error as e:
+        print(f"Database error in get_ingredients_by_recipe: {e}")
+        return []
 
-
-def delete_ingredients_by_recipe(db_path, recipe_id):
+def add_ingredients(recipe_id, ingredients_data):
     """
-    刪除某食譜的所有材料（用於編輯時先清除再重新新增）。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
+    新增材料清單到特定食譜
+    :param recipe_id: 食譜 ID
+    :param ingredients_data: 材料清單，格式為 [{'name': '...', 'quantity': '...'}, ...]
     """
-    conn = get_db(db_path)
     try:
-        conn.execute(
-            "DELETE FROM ingredients WHERE recipe_id = ?",
-            (recipe_id,)
-        )
+        conn = get_db_connection()
+        for item in ingredients_data:
+            if item.get('name') and item['name'].strip():  # 確保材料名稱存在
+                conn.execute(
+                    'INSERT INTO ingredients (recipe_id, name, quantity) VALUES (?, ?, ?)',
+                    (recipe_id, item['name'].strip(), item.get('quantity', '').strip())
+                )
         conn.commit()
-    finally:
         conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in add_ingredients: {e}")
+        return False
 
-
-# ============================================
-# 步驟（Step）CRUD
-# ============================================
-
-def add_steps(db_path, recipe_id, steps):
-    """
-    為食譜新增多筆步驟。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-        steps (list[dict]): 步驟列表，每項需包含 'step_number' 和 'description'
-            範例：[{'step_number': 1, 'description': '打蛋'}, {'step_number': 2, 'description': '熱鍋'}]
-    """
-    conn = get_db(db_path)
+def delete_ingredients_by_recipe(recipe_id):
+    """刪除特定食譜的所有材料（更新時使用）"""
     try:
-        for step in steps:
-            conn.execute(
-                "INSERT INTO steps (recipe_id, step_number, description) VALUES (?, ?, ?)",
-                (recipe_id, step['step_number'], step['description'])
-            )
+        conn = get_db_connection()
+        conn.execute('DELETE FROM ingredients WHERE recipe_id = ?', (recipe_id,))
         conn.commit()
-    finally:
         conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in delete_ingredients_by_recipe: {e}")
+        return False
 
+# ==========================================
+# Steps (步驟) 相關操作
+# ==========================================
 
-def get_steps_by_recipe(db_path, recipe_id):
-    """
-    取得某食譜的所有步驟（依步驟編號排序）。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
-
-    Returns:
-        list[sqlite3.Row]: 步驟列表（已按 step_number 排序）
-    """
-    conn = get_db(db_path)
+def get_steps_by_recipe(recipe_id):
+    """取得特定食譜的所有步驟，依順序排列"""
     try:
-        steps = conn.execute(
-            "SELECT * FROM steps WHERE recipe_id = ? ORDER BY step_number ASC",
-            (recipe_id,)
-        ).fetchall()
+        conn = get_db_connection()
+        steps = conn.execute('SELECT * FROM steps WHERE recipe_id = ? ORDER BY step_number ASC', (recipe_id,)).fetchall()
+        conn.close()
         return steps
-    finally:
-        conn.close()
+    except sqlite3.Error as e:
+        print(f"Database error in get_steps_by_recipe: {e}")
+        return []
 
-
-def delete_steps_by_recipe(db_path, recipe_id):
+def add_steps(recipe_id, steps_data):
     """
-    刪除某食譜的所有步驟（用於編輯時先清除再重新新增）。
-
-    Args:
-        db_path (str): 資料庫路徑
-        recipe_id (int): 食譜 ID
+    新增步驟清單到特定食譜
+    :param recipe_id: 食譜 ID
+    :param steps_data: 步驟字串清單，格式為 ['切菜', '下鍋炒', ...]
     """
-    conn = get_db(db_path)
     try:
-        conn.execute(
-            "DELETE FROM steps WHERE recipe_id = ?",
-            (recipe_id,)
-        )
+        conn = get_db_connection()
+        for i, desc in enumerate(steps_data):
+            if desc and desc.strip():  # 確保步驟不為空
+                conn.execute(
+                    'INSERT INTO steps (recipe_id, step_number, description) VALUES (?, ?, ?)',
+                    (recipe_id, i + 1, desc.strip())
+                )
         conn.commit()
-    finally:
         conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in add_steps: {e}")
+        return False
+
+def delete_steps_by_recipe(recipe_id):
+    """刪除特定食譜的所有步驟（更新時使用）"""
+    try:
+        conn = get_db_connection()
+        conn.execute('DELETE FROM steps WHERE recipe_id = ?', (recipe_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in delete_steps_by_recipe: {e}")
+        return False

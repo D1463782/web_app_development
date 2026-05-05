@@ -3,6 +3,32 @@
 {% block title %}首頁 - 食譜列表{% endblock %}
 
 {% block content %}
-    <h1>所有食譜</h1>
-    <!-- TODO: 使用 for 迴圈渲染 recipes 列表 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>所有食譜</h2>
+    <a href="{{ url_for('recipe.new_recipe') }}" class="btn btn-primary shadow-sm">新增食譜</a>
+</div>
+
+{% if recipes %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for recipe in recipes %}
+        <div class="col">
+            <div class="card h-100 shadow-sm border-0 bg-white">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">{{ recipe.name }}</h5>
+                    <p class="card-text text-muted">{{ recipe.description | truncate(60) if recipe.description else '暫無描述' }}</p>
+                </div>
+                <div class="card-footer bg-transparent border-top pb-3 pt-3">
+                    <a href="{{ url_for('recipe.recipe_detail', id=recipe.id) }}" class="btn btn-outline-primary btn-sm w-100 stretched-link">查看詳情</a>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info text-center shadow-sm py-5 mt-4 border-0">
+        <h4 class="alert-heading mb-3">🍽️ 目前還沒有任何食譜</h4>
+        <p>您的食譜收藏夾空空如也，趕快來新增您的第一道私房料理吧！</p>
+        <a href="{{ url_for('recipe.new_recipe') }}" class="btn btn-primary mt-2">立即新增</a>
+    </div>
+{% endif %}
 {% endblock %}

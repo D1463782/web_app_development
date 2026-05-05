@@ -1,15 +1,171 @@
 {% extends "base.html" %}
 
-{% block title %}新增/編輯食譜{% endblock %}
+{% block title %}{{ '編輯食譜' if recipe and recipe.id else '新增食譜' }}{% endblock %}
 
 {% block content %}
-    <h1><!-- TODO: 根據是新增還是編輯顯示不同標題 --></h1>
-    
-    <form method="POST">
-        <!-- TODO: 食譜基本資料欄位預留 -->
-        <!-- TODO: 材料動態輸入欄位預留 -->
-        <!-- TODO: 步驟動態輸入欄位預留 -->
-        
-        <button type="submit">儲存</button>
-    </form>
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-5">
+            <div class="card-header bg-white pt-4 pb-3 border-bottom-0">
+                <h3 class="mb-0 text-center">{{ '編輯食譜' if recipe and recipe.id else '新增食譜' }}</h3>
+            </div>
+            <div class="card-body p-4 p-md-5 pt-0">
+                <form action="{{ url_for('recipe.update_recipe_action', id=recipe.id) if recipe and recipe.id else url_for('recipe.create_recipe') }}" method="POST">
+                    
+                    <!-- 基本資料 -->
+                    <div class="bg-light p-4 rounded-3 mb-4">
+                        <h5 class="mb-3 text-primary border-bottom pb-2">1. 基本資料</h5>
+                        <div class="mb-3">
+                            <label for="name" class="form-label fw-bold">食譜名稱 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-lg" id="name" name="name" value="{{ recipe.name if recipe else '' }}" placeholder="例如：番茄炒蛋" required>
+                        </div>
+                        <div class="mb-2">
+                            <label for="description" class="form-label fw-bold">簡介</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" placeholder="簡單描述這道菜的特色...">{{ recipe.description if recipe else '' }}</textarea>
+                        </div>
+                    </div>
+
+                    <!-- 材料 -->
+                    <div class="bg-light p-4 rounded-3 mb-4">
+                        <h5 class="mb-3 text-success border-bottom pb-2 d-flex justify-content-between align-items-center">
+                            2. 材料清單
+                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3" id="add-ingredient">＋ 新增一項</button>
+                        </h5>
+                        <div id="ingredients-container">
+                            {% if ingredients %}
+                                {% for item in ingredients %}
+                                <div class="row g-2 mb-3 ingredient-row">
+                                    <div class="col-7">
+                                        <input type="text" class="form-control" name="ingredient_name[]" value="{{ item.name }}" placeholder="材料名稱 (例: 雞蛋)" required>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" class="form-control" name="ingredient_quantity[]" value="{{ item.quantity }}" placeholder="份量 (例: 3顆)">
+                                    </div>
+                                    <div class="col-1 text-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0" title="移除"><i class="bi bi-x-lg"></i>✕</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <!-- 預設提供兩個空白列 -->
+                                <div class="row g-2 mb-3 ingredient-row">
+                                    <div class="col-7">
+                                        <input type="text" class="form-control" name="ingredient_name[]" placeholder="材料名稱 (例: 雞蛋)">
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" class="form-control" name="ingredient_quantity[]" placeholder="份量 (例: 3顆)">
+                                    </div>
+                                    <div class="col-1 text-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-3 ingredient-row">
+                                    <div class="col-7">
+                                        <input type="text" class="form-control" name="ingredient_name[]" placeholder="材料名稱 (例: 牛番茄)">
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" class="form-control" name="ingredient_quantity[]" placeholder="份量 (例: 2顆)">
+                                    </div>
+                                    <div class="col-1 text-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- 步驟 -->
+                    <div class="bg-light p-4 rounded-3 mb-4">
+                        <h5 class="mb-3 text-primary border-bottom pb-2 d-flex justify-content-between align-items-center">
+                            3. 料理步驟
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="add-step">＋ 新增步驟</button>
+                        </h5>
+                        <div id="steps-container">
+                            {% if steps %}
+                                {% for step in steps %}
+                                <div class="row g-2 mb-3 step-row">
+                                    <div class="col-11">
+                                        <textarea class="form-control" name="step_description[]" rows="2" placeholder="步驟說明" required>{{ step.description }}</textarea>
+                                    </div>
+                                    <div class="col-1 text-end d-flex align-items-center justify-content-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="row g-2 mb-3 step-row">
+                                    <div class="col-11">
+                                        <textarea class="form-control" name="step_description[]" rows="2" placeholder="步驟 1 說明..."></textarea>
+                                    </div>
+                                    <div class="col-1 text-end d-flex align-items-center justify-content-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-3 step-row">
+                                    <div class="col-11">
+                                        <textarea class="form-control" name="step_description[]" rows="2" placeholder="步驟 2 說明..."></textarea>
+                                    </div>
+                                    <div class="col-1 text-end d-flex align-items-center justify-content-end">
+                                        <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 pt-3">
+                        <button type="submit" class="btn btn-primary btn-lg rounded-pill shadow-sm">儲存食譜</button>
+                        <a href="{{ url_for('recipe.recipe_detail', id=recipe.id) if recipe and recipe.id else url_for('recipe.index') }}" class="btn btn-light rounded-pill mt-2">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 刪除按鈕功能委派
+    document.body.addEventListener('click', function(e) {
+        if(e.target.classList.contains('btn-remove')) {
+            e.target.closest('.row').remove();
+        }
+    });
+
+    // 新增材料列
+    document.getElementById('add-ingredient').addEventListener('click', function() {
+        const container = document.getElementById('ingredients-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'row g-2 mb-3 ingredient-row';
+        newRow.innerHTML = `
+            <div class="col-7">
+                <input type="text" class="form-control" name="ingredient_name[]" placeholder="材料名稱">
+            </div>
+            <div class="col-4">
+                <input type="text" class="form-control" name="ingredient_quantity[]" placeholder="份量">
+            </div>
+            <div class="col-1 text-end">
+                <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+            </div>
+        `;
+        container.appendChild(newRow);
+    });
+
+    // 新增步驟列
+    document.getElementById('add-step').addEventListener('click', function() {
+        const container = document.getElementById('steps-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'row g-2 mb-3 step-row';
+        newRow.innerHTML = `
+            <div class="col-11">
+                <textarea class="form-control" name="step_description[]" rows="2" placeholder="新步驟說明..."></textarea>
+            </div>
+            <div class="col-1 text-end d-flex align-items-center justify-content-end">
+                <button type="button" class="btn btn-outline-danger btn-remove border-0">✕</button>
+            </div>
+        `;
+        container.appendChild(newRow);
+    });
+});
+</script>
 {% endblock %}

@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 
-{% block title %}確認刪除{% endblock %}
+{% block title %}確認刪除 - {{ recipe.name }}{% endblock %}
 
 {% block content %}
-    <h1>確認刪除食譜？</h1>
-    <p>您確定要刪除「<!-- TODO: 顯示食譜名稱 -->」嗎？此動作無法復原。</p>
-    
-    <form method="POST">
-        <button type="submit">確認刪除</button>
-        <a href="<!-- TODO: 取消回詳情頁 -->">取消</a>
-    </form>
+<div class="row justify-content-center mt-5 mb-5">
+    <div class="col-md-6">
+        <div class="card border-danger shadow border-0">
+            <div class="card-header bg-danger text-white py-3">
+                <h4 class="mb-0 text-center"><i class="bi bi-exclamation-triangle"></i> ⚠️ 確認刪除</h4>
+            </div>
+            <div class="card-body text-center py-5">
+                <h4 class="card-title mb-4">您確定要刪除「<span class="text-danger">{{ recipe.name }}</span>」嗎？</h4>
+                <div class="alert alert-light border text-start mb-4">
+                    <p class="mb-0 text-muted"><strong>請注意：</strong>此動作無法復原，與該食譜相關的所有材料與步驟記錄將會一併被永久刪除。</p>
+                </div>
+                
+                <form action="{{ url_for('recipe.delete_recipe_action', id=recipe.id) }}" method="POST">
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{{ url_for('recipe.recipe_detail', id=recipe.id) }}" class="btn btn-outline-secondary px-4 rounded-pill">返回，不刪除了</a>
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill shadow-sm">是的，確認刪除</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
